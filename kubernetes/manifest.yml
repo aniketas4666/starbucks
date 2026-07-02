@@ -4,8 +4,6 @@ kind: DaemonSet
 metadata:
   name: starbucks-deployment
 spec:
-  strategy:
-    type: RollingUpdate
   selector:
     matchLabels:
       app: starbucks
