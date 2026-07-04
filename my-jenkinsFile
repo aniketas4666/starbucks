@@ -1,0 +1,69 @@
+pipeline{
+    agent any
+    tools{
+        jdk 'jdk'
+        nodejs 'nodejs'
+    }
+    environment {
+        SCANNER_HOME=tool 'sonar'
+    }
+    stages {
+        stage('clean workspace'){
+            steps{
+                cleanWs()
+            }
+        }
+        stage('Checkout from Git'){
+            steps{
+                git branch: 'main', url: 'https://github.com/aniketas4666/starbucks.git'
+            }
+        }
+        stage("Sonarqube Analysis "){
+            steps{
+                withSonarQubeEnv('SonarQube') {
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=starbucks \
+                    -Dsonar.projectKey=starbucks '''
+                }
+            }
+        }
+        stage("quality gate"){
+           steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar' 
+                }
+            } 
+        }
+        stage('Install Dependencies') {
+            steps {
+                sh "npm install"
+            }
+        }        
+        stage('TRIVY FS SCAN') {
+            steps {
+                sh "trivy fs . > trivyfs.txt"
+            }
+        }
+        stage("Docker Build & Push"){
+            steps{
+                script{
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
+                       sh "docker build -t starbucks ."
+                       sh "docker tag starbucks andyas2501/starbucks:latest "
+                       sh "docker push andyas2501/starbucks:latest "
+                    }
+                }
+            }
+        }
+        stage("TRIVY"){
+            steps{
+                sh "trivy image andyas2501/starbucks:latest > trivyimage.txt" 
+            }
+        }
+        stage('App Deploy to Docker container'){
+            steps{
+                sh 'docker run -d --name starbucks -p 3000:3000 andyas2501/starbucks:latest'
+            }
+        }
+    }
+}
+
